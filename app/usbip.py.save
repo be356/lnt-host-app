@@ -1,0 +1,104 @@
+x"""
+usbip.py — Device discovery helper for connected DUTs.
+
+Purpose:
+- Parse 'lsusb' command output to identify USB-connected Devices Under Test (DUTs).
+- Designed for safe use (no root privileges required).
+- Supports mock data injection for testing.
+"""
+from __future__ import annotations
+from dataclasses import dataclass, asdict
+from typing import Callable, Iterable, List, Optional
+import re
+import subprocess
+
+@dataclass(frozen=True)
+class DUT:
+    """Represent a single USB-connected DUT."""
+    bus: str
+    device: str
+    vid: str
+    pid: str
+    description: str
+
+    def as_dict(self) -> dict:
+        """Convert DUT object into a dictionary for JSON serialization."""
+        return asdict(self)
+
+# Regex pattern that matches one line of `lsusb` output
+# macOS lsusb often has NO trailing description; make it optional.
+_LSUSB_LINE = re.compile(
+    r"Bus\s+(?P<bus>\d+)\s+Device\s+(?P<device>\d+):\s+ID\s+"
+    r"(?P<vid>[0-9a-fA-F]{4}):(?P<pid>[0-9a-fA-F]{4})(?:\s+(?P<desc>.*))?$"
+)
+
+def _default_lsusb_provider() -> Iterable[str]:
+    """
+    Default provider: runs `lsusb` command.
+    Returns each output line.
+    If `lsusb` is not found or fails, returns empty list (safe fail).
+    """
+    try:
+        output = subprocess.check_output(["lsusb"], text=True)
+        return output.splitlines()
+    except Exception:
+        return []
+
+def parse_lsusb_lines(lines: Iterable[str]) -> List[DUT]:
+    """
+    Parse raw lsusb output lines into a list of DUT objects.
+    Each valid line becomes a DUT instance.
+    """
+    devices: List[DUT] = []
+    for line in lines:
+        match = _LSUSB_LINE.match(line.strip())
+        if not match:
+            continue  # skip invalid lines
+        devices.append(
+            DUT(
+                bus=match.group("bus"),
+                device=match.group("device"),
+                vid=match.group("vid").lower(),
+                pid=match.group("pid").lower(),
+                description=(match.group("desc") or "Unknown device").strip(),
+            )
+        )
+    return devices
+
+def list_duts(provider: Optional[Callable[[], Iterable[str]]] = None) -> List[DUT]:
+    """
+    Return a list of all connected DUTs.
+    - provider: optional custom function returning mock lsusb lines for testing.
+    """
+    src = provider or _default_lsusb_provider
+    return parse_lsusb_lines(src())
+
+# -------------------------------
+# Demo / test runner (with debug)
+# -------------------------------
+if __name__ == "__main__":
+    # Debug: show what lsusb returned so we can see *something*
+    raw = list(_default_lsusb_provider())
+    print(f"DEBUG: lsusb lines found = {len(raw)}")
+    if raw[:2]:
+        print("DEBUG sample line 1:", raw[0])
+        if len(raw) > 1:
+            print("DEBUG sample line 2:", raw[1])
+    print()
+
+    duts = list_duts()
+    if not duts:
+        print("No DUTs detected via lsusb.\n")
+
+        # Fallback: mock data so you still see output on macOS
+        mock_lines = [
+            "Bus 001 Device 003: ID 0451:bef3 Texas Instruments, Inc. CC1352R1 Launchpad",
+            "Bus 002 Device 007: ID 1234:abcd Example Device Inc."
+        ]
+        print("Using mock data instead:\n")
+        for dut in list_duts(provider=lambda: mock_lines):
+            print(dut)
+    else:
+        print(f"Detected {len(duts)} DUT(s):\n")
+        for dut in duts:
+            print(dut)
