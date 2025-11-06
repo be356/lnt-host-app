@@ -24,3 +24,20 @@ def serial_txrx(dut_id: str, data: str, terminator: str = "\n"):
             return {"port": port, "baud": BAUD, "sent": data, "received": line}
     except Exception as e:
         return {"error": str(e)}
+class SerialPort:
+    def __init__(self, port: str = "/dev/ttyUSB0", baudrate: int = 115200):
+        # placeholder, real code would open pyserial here
+        self.port = port
+        self.baudrate = baudrate
+
+    def write(self, data: str):
+        # placeholder for sending to DUT
+        return f"sent: {data}"
+
+    def read(self):
+        # placeholder for reading from DUT
+        return "ok"
+
+def list_serial_ports():
+    # placeholder, main.py may call this
+    return []

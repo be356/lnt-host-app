@@ -20,3 +20,9 @@ def list_duts():
         return duts
     except Exception as e:
         return {"error": str(e)}
+def list_duts_internal():
+    # temporary stub so FastAPI can import it
+    # later we can make this run `usbip list` on the Pi
+    return []
+def list_duts_internal():
+    return []
